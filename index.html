@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Lecture Player</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="app-header">
+            <h1>Audio Lecture Player</h1>
+            <p class="subtitle">Upload, manage, and play your audio lectures</p>
+        </header>
+
+        <!-- File Upload Section -->
+        <section class="upload-section card">
+            <div class="card__body">
+                <h2>Upload Audio Lectures</h2>
+                <div class="upload-area">
+                    <input type="file" id="audioFiles" multiple accept=".mp3,.wav,.ogg,.m4a,.aac" class="file-input">
+                    <label for="audioFiles" class="file-label">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">
+                            <strong>Choose audio files</strong> or drag and drop
+                            <small>Supports MP3, WAV, OGG, M4A, AAC</small>
+                        </div>
+                    </label>
+                </div>
+                
+                <div id="selectedFiles" class="selected-files hidden"></div>
+                <button id="uploadBtn" class="btn btn--primary btn--full-width hidden">Upload Files</button>
+            </div>
+        </section>
+
+        <!-- Metadata Editor Section -->
+        <section id="metadataSection" class="metadata-section hidden">
+            <div class="card">
+                <div class="card__header">
+                    <h2>Edit Metadata</h2>
+                </div>
+                <div class="card__body">
+                    <div id="metadataForms"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Audio Player Section -->
+        <section class="player-section card">
+            <div class="card__body">
+                <div class="player-info">
+                    <h3 id="currentTitle">No lecture selected</h3>
+                    <p id="currentInstructor" class="text-secondary"></p>
+                    <p id="currentCourse" class="text-secondary"></p>
+                </div>
+                
+                <div class="audio-player">
+                    <audio id="audioElement" preload="metadata"></audio>
+                    
+                    <div class="player-controls">
+                        <button id="prevBtn" class="btn btn--outline btn--sm" disabled>⏮️</button>
+                        <button id="playPauseBtn" class="btn btn--primary">▶️</button>
+                        <button id="nextBtn" class="btn btn--outline btn--sm" disabled>⏭️</button>
+                    </div>
+                    
+                    <div class="progress-section">
+                        <div class="progress-bar">
+                            <div class="progress-track">
+                                <div id="progressFill" class="progress-fill"></div>
+                                <input type="range" id="progressSlider" class="progress-slider" min="0" max="100" value="0">
+                            </div>
+                        </div>
+                        <div class="time-display">
+                            <span id="currentTime">0:00</span>
+                            <span id="totalTime">0:00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="player-options">
+                        <div class="volume-control">
+                            <label>Volume:</label>
+                            <input type="range" id="volumeSlider" class="form-control" min="0" max="100" value="50">
+                        </div>
+                        
+                        <div class="speed-control">
+                            <label>Speed:</label>
+                            <select id="speedSelect" class="form-control">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lecture Library Section -->
+        <section class="library-section card">
+            <div class="card__header">
+                <h2>Lecture Library</h2>
+                <div class="library-controls">
+                    <input type="text" id="searchInput" class="form-control search-input" placeholder="Search lectures...">
+                    <select id="sortSelect" class="form-control sort-select">
+                        <option value="date">Sort by Date</option>
+                        <option value="title">Sort by Title</option>
+                        <option value="instructor">Sort by Instructor</option>
+                        <option value="duration">Sort by Duration</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card__body">
+                <div id="lectureList" class="lecture-list">
+                    <div class="empty-state">
+                        <p>No lectures uploaded yet. Use the upload section above to add audio files.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Export/Import Section -->
+        <section class="export-section card">
+            <div class="card__body">
+                <h3>Data Management</h3>
+                <div class="export-controls">
+                    <button id="exportBtn" class="btn btn--outline">Export Metadata</button>
+                    <input type="file" id="importFile" accept=".json" class="file-input">
+                    <label for="importFile" class="btn btn--outline">Import Metadata</label>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Metadata Form Template -->
+    <template id="metadataFormTemplate">
+        <div class="metadata-form">
+            <h4 class="form-title"></h4>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" class="form-control title-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Instructor/Speaker</label>
+                    <input type="text" class="form-control instructor-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Course/Subject</label>
+                    <input type="text" class="form-control course-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-control date-input">
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Description/Notes</label>
+                    <textarea class="form-control description-input" rows="3"></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Tags (comma-separated)</label>
+                    <input type="text" class="form-control tags-input" placeholder="e.g. physics, introduction, mechanics">
+                </div>
+            </div>
+            <button class="btn btn--primary save-metadata-btn">Save Metadata</button>
+        </div>
+    </template>
+
+    <!-- Lecture Item Template -->
+    <template id="lectureItemTemplate">
+        <div class="lecture-item">
+            <div class="lecture-info">
+                <h4 class="lecture-title"></h4>
+                <p class="lecture-instructor"></p>
+                <p class="lecture-course"></p>
+                <div class="lecture-meta">
+                    <span class="duration"></span>
+                    <span class="date"></span>
+                    <div class="tags"></div>
+                </div>
+            </div>
+            <div class="lecture-actions">
+                <button class="btn btn--primary btn--sm play-btn">Play</button>
+                <button class="btn btn--outline btn--sm edit-btn">Edit</button>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
