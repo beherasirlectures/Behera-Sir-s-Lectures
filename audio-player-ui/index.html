@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Lecture Player</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header Section -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="app-title">Audio Lecture Player</h1>
+                    <p class="app-subtitle">Your personal spiritual lecture library</p>
+                </div>
+                <div class="header-controls">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" class="form-control search-input" placeholder="Search lectures, instructors, topics...">
+                    </div>
+                    <select id="sortSelect" class="form-control sort-select">
+                        <option value="date">Sort by Date</option>
+                        <option value="title">Sort by Title</option>
+                        <option value="instructor">Sort by Instructor</option>
+                        <option value="duration">Sort by Duration</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button id="listViewBtn" class="btn btn--outline btn--sm active">List</button>
+                        <button id="gridViewBtn" class="btn btn--outline btn--sm">Grid</button>
+                    </div>
+                    <button id="themeToggle" class="btn btn--outline btn--sm theme-toggle">🌙</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Audio Player Section -->
+            <section class="audio-player-section card">
+                <div class="card__body">
+                    <!-- Current Playing Info -->
+                    <div class="now-playing-info">
+                        <div class="lecture-artwork">
+                            <div class="artwork-placeholder">🎧</div>
+                        </div>
+                        <div class="lecture-details">
+                            <h2 id="currentTitle" class="lecture-title">Select a lecture to start playing</h2>
+                            <p id="currentInstructor" class="lecture-instructor"></p>
+                            <p id="currentCourse" class="lecture-course"></p>
+                            <p id="currentDate" class="lecture-date"></p>
+                        </div>
+                        <div class="lecture-actions">
+                            <button id="favoriteBtn" class="btn btn--outline btn--sm favorite-btn" title="Add to favorites">⭐</button>
+                            <button id="bookmarkBtn" class="btn btn--outline btn--sm bookmark-btn" title="Bookmark position">🔖</button>
+                        </div>
+                    </div>
+
+                    <!-- Audio Element -->
+                    <audio id="audioElement" preload="metadata"></audio>
+
+                    <!-- Progress Bar -->
+                    <div class="progress-section">
+                        <div class="progress-container">
+                            <div class="progress-track">
+                                <div id="progressFill" class="progress-fill"></div>
+                                <input type="range" id="progressSlider" class="progress-slider" min="0" max="100" value="0">
+                            </div>
+                        </div>
+                        <div class="time-display">
+                            <span id="currentTime">0:00</span>
+                            <span id="totalTime">0:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Playback Controls -->
+                    <div class="playback-controls">
+                        <button id="shuffleBtn" class="btn btn--outline control-btn" title="Shuffle">🔀</button>
+                        <button id="prevBtn" class="btn btn--outline control-btn" title="Previous" disabled>⏮️</button>
+                        <button id="playPauseBtn" class="btn btn--primary play-pause-btn" title="Play/Pause">▶️</button>
+                        <button id="nextBtn" class="btn btn--outline control-btn" title="Next" disabled>⏭️</button>
+                        <button id="repeatBtn" class="btn btn--outline control-btn" title="Repeat">🔁</button>
+                    </div>
+
+                    <!-- Additional Controls -->
+                    <div class="additional-controls">
+                        <div class="volume-control">
+                            <span class="control-label">Volume</span>
+                            <div class="volume-slider-container">
+                                <span class="volume-icon">🔊</span>
+                                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
+                            </div>
+                        </div>
+                        
+                        <div class="speed-control">
+                            <span class="control-label">Speed</span>
+                            <select id="speedSelect" class="form-control speed-select">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Access Sections -->
+            <div class="quick-access">
+                <div class="section-tabs">
+                    <button id="allLecturesTab" class="tab-btn active">All Lectures</button>
+                    <button id="recentTab" class="tab-btn">Recently Played</button>
+                    <button id="favoritesTab" class="tab-btn">Favorites</button>
+                    <button id="continueTab" class="tab-btn">Continue Listening</button>
+                </div>
+            </div>
+
+            <!-- Lecture Library Section -->
+            <section class="lecture-library-section">
+                <div class="library-header">
+                    <h3 id="sectionTitle">All Lectures</h3>
+                    <div class="library-stats">
+                        <span id="lectureCount">0 lectures</span>
+                    </div>
+                </div>
+                
+                <div id="lectureList" class="lecture-list">
+                    <div class="loading-state">
+                        <p>Loading lectures...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Playback History Modal -->
+        <div id="historyModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Playback History</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="historyList" class="history-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lecture Item Template -->
+    <template id="lectureItemTemplate">
+        <div class="lecture-item">
+            <div class="lecture-artwork-small">🎧</div>
+            <div class="lecture-info">
+                <h4 class="lecture-title"></h4>
+                <p class="lecture-instructor"></p>
+                <p class="lecture-course"></p>
+                <div class="lecture-meta">
+                    <span class="duration"></span>
+                    <span class="date"></span>
+                    <div class="progress-indicator">
+                        <div class="progress-bar-small">
+                            <div class="progress-fill-small"></div>
+                        </div>
+                        <span class="progress-text"></span>
+                    </div>
+                </div>
+                <div class="tags"></div>
+            </div>
+            <div class="lecture-actions">
+                <button class="btn btn--primary btn--sm play-btn">▶️</button>
+                <button class="btn btn--outline btn--sm favorite-btn">⭐</button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Grid Lecture Item Template -->
+    <template id="lectureGridItemTemplate">
+        <div class="lecture-grid-item">
+            <div class="lecture-artwork-grid">🎧</div>
+            <div class="lecture-info-grid">
+                <h4 class="lecture-title"></h4>
+                <p class="lecture-instructor"></p>
+                <p class="lecture-course"></p>
+                <div class="lecture-meta-grid">
+                    <span class="duration"></span>
+                    <span class="date"></span>
+                </div>
+                <div class="progress-indicator-grid">
+                    <div class="progress-bar-small">
+                        <div class="progress-fill-small"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="lecture-actions-grid">
+                <button class="btn btn--primary play-btn">▶️</button>
+                <button class="btn btn--outline favorite-btn">⭐</button>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
