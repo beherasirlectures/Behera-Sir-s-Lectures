@@ -132,7 +132,7 @@ class AudioLecturePlayer {
             "lectures": [
                 {
                     "id": "lecture_20250828_001",
-                    "filename": "SB-3.16.18-golok-dhaam-kaa-vistRt-vrnnn-HG-Lila-Purushottam-Prabhu_1.mp3",
+                    "filename": "new.mp3",
                     "title": "Detailed Description of Golok Dham - SB 3.16.18",
                     "instructor": "HG Lila Purushottam Prabhu",
                     "course": "Srimad Bhagavatam",
@@ -520,27 +520,33 @@ class AudioLecturePlayer {
         const audioPath = `audio/${lecture.filename}`;
         this.elements.audioElement.src = audioPath;
     
-        // Set playing state
-                // Play the audio
-        this.elements.audioElement.play();
-        this.isPlaying = true;
-
-        this.isPlaying = true;
-        this.updatePlayPauseButton();
+        // Update the UI with lecture details
+        this.updatePlayerInfo();
     
-        // Simulate duration and current time
-        this.elements.totalTime.textContent = this.formatTime(lecture.duration);
-        this.elements.currentTime.textContent = this.formatTime(lecture.lastPosition || 0);
+        // Play the audio
+        this.elements.audioElement.play().then(() => {
+            this.isPlaying = true;
+            this.updatePlayPauseButton();
+        }).catch((error) => {
+            console.error('Error playing audio:', error);
+            alert('Failed to play the audio file. Please check if the file exists.');
+        });
     
-        // Update progress based on last position
-        if (lecture.lastPosition > 0) {
-            const progress = (lecture.lastPosition / lecture.duration) * 100;
-            this.elements.progressFill.style.width = `${progress}%`;
-            this.elements.progressSlider.value = progress;
-        } else {
-            this.elements.progressFill.style.width = '0%';
-            this.elements.progressSlider.value = 0;
-        }
+        // Update progress and duration when metadata is loaded
+        this.elements.audioElement.addEventListener('loadedmetadata', () => {
+            this.elements.totalTime.textContent = this.formatTime(this.elements.audioElement.duration);
+            this.updateProgress();
+        });
+    
+        // Update progress as the audio plays
+        this.elements.audioElement.addEventListener('timeupdate', () => {
+            this.updateProgress();
+        });
+    
+        // Handle audio end
+        this.elements.audioElement.addEventListener('ended', () => {
+            this.handleAudioEnd();
+        });
     }
 
     showPlaybackMessage(lecture) {
