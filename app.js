@@ -22,6 +22,9 @@ class AudioLecturePlayer {
     }
 
     initializeApp() {
+        // Load saved playback state
+        this.loadPlaybackState();
+        
         // Get DOM elements
         this.elements = {
             // Audio player elements
@@ -128,101 +131,31 @@ class AudioLecturePlayer {
 
     loadLectureData() {
         // Load the provided lecture data
-        const lectureData = {
-            "lectures": [
-                {
-                    "id": "lecture_20250828_001",
-                    "filename": "new.mp3",
-                    "title": "Detailed Description of Golok Dham - SB 3.16.18",
-                    "instructor": "HG Lila Purushottam Prabhu",
-                    "course": "Srimad Bhagavatam",
-                    "date": "28th Aug 2025",
-                    "based_on": "SB 3.16.18",
-                    "key": "Detailed description of Golok Dham",
-                    "description": "A comprehensive explanation of the spiritual realm of Goloka Vrindavan, discussing the eternal nature of spiritual relationships and the divine activities that take place in the spiritual world. The lecture covers the differences between material and spiritual existence, emphasizing the eternal occupational duties of devotees in the spiritual realm.",
-                    "video_link": "https://youtu.be/sR6yyeQJduw?si=dsl1NTa9AV1Znf5h",
-                    "duration": 3240,
-                    "tags": ["goloka", "spiritual world", "srimad bhagavatam", "vrindavan", "eternal dharma"],
-                    "audioUrl": "audio/SB-3.16.18-golok-dhaam.mp3",
-                    "lastPosition": 0,
-                    "isFavorite": false,
-                    "playCount": 0,
-                    "lastPlayed": null
-                },
-                {
-                    "id": "lecture_20250827_001",
-                    "filename": "bhakti-principles.mp3",
-                    "title": "Nine Processes of Devotional Service",
-                    "instructor": "HG Devotional Acharya Prabhu",
-                    "course": "Bhakti Yoga Principles",
-                    "date": "27th Aug 2025",
-                    "based_on": "SB 7.5.23",
-                    "key": "Sravanam kirtanam vishnoh - Nine fold path of devotion",
-                    "description": "Detailed explanation of the nine processes of devotional service as described by Prahlad Maharaj. This lecture covers hearing, chanting, remembering, serving the lotus feet, worshiping, praying, serving, friendship, and surrender.",
-                    "duration": 2880,
-                    "tags": ["bhakti yoga", "devotional service", "nine processes", "prahlad maharaj"],
-                    "audioUrl": "audio/bhakti-principles.mp3",
-                    "lastPosition": 450,
-                    "isFavorite": true,
-                    "playCount": 3,
-                    "lastPlayed": "2025-08-29"
-                },
-                {
-                    "id": "lecture_20250826_001",
-                    "filename": "krishna-consciousness-basics.mp3",
-                    "title": "Introduction to Krishna Consciousness",
-                    "instructor": "HG Spiritual Guide Prabhu",
-                    "course": "Bhagavad Gita As It Is",
-                    "date": "26th Aug 2025",
-                    "based_on": "BG 2.13",
-                    "key": "Understanding the eternal nature of the soul",
-                    "description": "An introductory lecture on Krishna consciousness covering the basic principles of spiritual life, the nature of the soul, and the importance of developing a relationship with Krishna.",
-                    "duration": 3600,
-                    "tags": ["krishna consciousness", "bhagavad gita", "soul", "spiritual life"],
-                    "audioUrl": "audio/krishna-consciousness-basics.mp3",
-                    "lastPosition": 0,
-                    "isFavorite": false,
-                    "playCount": 1,
-                    "lastPlayed": "2025-08-26"
-                },
-                {
-                    "id": "lecture_20250825_001",
-                    "filename": "chanting-holy-names.mp3",
-                    "title": "The Power of Chanting the Holy Names",
-                    "instructor": "HG Kirtan Master Prabhu",
-                    "course": "Nama Tattva",
-                    "date": "25th Aug 2025",
-                    "based_on": "CC Adi 17.21",
-                    "key": "Harer nama harer nama - Only the holy name",
-                    "description": "This lecture explains the supreme importance of chanting the holy names of Krishna in this age of Kali. Discusses the process, benefits, and spiritual significance of the Hare Krishna maha-mantra.",
-                    "duration": 2700,
-                    "tags": ["holy names", "chanting", "hare krishna", "kali yuga", "nama tattva"],
-                    "audioUrl": "audio/chanting-holy-names.mp3",
-                    "lastPosition": 1200,
-                    "isFavorite": true,
-                    "playCount": 5,
-                    "lastPlayed": "2025-08-30"
-                },
-                {
-                    "id": "lecture_20250824_001",
-                    "filename": "guru-tattva-principles.mp3",
-                    "title": "Understanding Guru Tattva - The Science of Disciplic Succession",
-                    "instructor": "HG Learned Scholar Prabhu",
-                    "course": "Guru Tattva",
-                    "date": "24th Aug 2025",
-                    "based_on": "BG 4.34",
-                    "key": "Tad viddhi pranipatena - Approach the guru with submission",
-                    "description": "A comprehensive explanation of the guru-disciple relationship, the importance of disciplic succession, and how spiritual knowledge is transmitted through authorized channels.",
-                    "duration": 4200,
-                    "tags": ["guru tattva", "disciplic succession", "spiritual master", "parampara"],
-                    "audioUrl": "audio/guru-tattva-principles.mp3",
-                    "lastPosition": 0,
-                    "isFavorite": false,
-                    "playCount": 2,
-                    "lastPlayed": "2025-08-25"
+        // Fetch lecture data from metadata.json
+        fetch('metadata.json')
+            .then(response => response.json())
+            .then(lectureData => {
+            this.lectures = lectureData.lectures;
+
+            // Initialize favorites from data
+            this.lectures.forEach(lecture => {
+                if (lecture.isFavorite) {
+                this.favorites.add(lecture.id);
                 }
-            ]
-        };
+            });
+
+            // Initialize playback history
+            this.playbackHistory = this.lectures
+                .filter(lecture => lecture.lastPlayed)
+                .sort((a, b) => new Date(b.lastPlayed) - new Date(a.lastPlayed));
+
+            this.filterAndRenderLectures();
+            })
+            .catch(error => {
+            console.error('Failed to load lecture metadata:', error);
+            // Optionally show a user-friendly error message
+            });
+        return; // Prevent further code execution in this method until fetch completes
 
         this.lectures = lectureData.lectures;
         
@@ -717,10 +650,17 @@ class AudioLecturePlayer {
         this.elements.currentTime.textContent = this.formatTime(time);
         this.elements.progressFill.style.width = `${value}%`;
         
-        // In a real application, this would seek the audio element
         if (this.elements.audioElement.duration) {
             this.elements.audioElement.currentTime = time;
+            this.savePlaybackState();
         }
+        
+        // Show visual feedback
+        this.elements.progressTrack.classList.add('seeking');
+        clearTimeout(this._seekTimeout);
+        this._seekTimeout = setTimeout(() => {
+            this.elements.progressTrack.classList.remove('seeking');
+        }, 500);
     }
 
     setVolume(value) {
@@ -774,6 +714,43 @@ class AudioLecturePlayer {
         
         // Save progress
         this.currentLecture.lastPosition = this.elements.audioElement.currentTime;
+        
+        // Save to localStorage
+        this.savePlaybackState();
+    }
+
+    savePlaybackState() {
+        if (!this.currentLecture) return;
+        
+        const playbackState = {
+            lectureId: this.currentLecture.id,
+            position: this.currentLecture.lastPosition,
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem('audioPlayerState', JSON.stringify(playbackState));
+    }
+
+    loadPlaybackState() {
+        const savedState = localStorage.getItem('audioPlayerState');
+        if (!savedState) return;
+        
+        try {
+            const state = JSON.parse(savedState);
+            // Only restore if saved within last 24 hours
+            if (Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+                const lecture = this.lectures.find(l => l.id === state.lectureId);
+                if (lecture) {
+                    this.playLecture(lecture);
+                    // Wait for audio to be ready before seeking
+                    this.elements.audioElement.addEventListener('canplay', () => {
+                        this.elements.audioElement.currentTime = state.position;
+                    }, { once: true });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load playback state:', e);
+        }
     }
 
     updatePlayPauseButton() {

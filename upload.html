@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Upload Audio</title>
+</head>
+
+<body>
+    <h1>Upload Audio File</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <div>
+            <label for="title">Title:</label>
+            <input type="text" name="title" id="title" />
+        </div>
+        <div>
+            <label for="driveLink">Google Drive Link:</label>
+            <input type="text" name="driveLink" id="driveLink" required />
+        </div>
+        <button type="submit">Upload</button>
+    </form>
+    <a href="view.html">Go to View Audio Files</a>
+</body>
+
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>View Audio Files</title>
+</head>
+
+<body>
+    <h1>Uploaded Audio Files</h1>
+    <div id="audio-list"></div>
+    <a href="upload.html">Go to Upload Page</a>
+    <script>
+        fetch('/audio-list')
+            .then(res => res.json())
+            .then(files => {
+                const container = document.getElementById('audio-list');
+                if (files.length === 0) {
+                    container.innerHTML = '<p>No audio files uploaded yet.</p>';
+                } else {
+                    files.forEach(file => {
+                        const div = document.createElement('div');
+                        // Convert Google Drive link to direct download link
+                        const driveId = file.audioUrl.match(/\/d\/(.*?)\/view/)?.[1];
+                        const directLink = driveId ? `https://drive.google.com/uc?export=download&id=${driveId}` : '';
+
+                        div.innerHTML = `
+              <p>${file.title || file.originalname}</p>
+              <audio controls src="${directLink}"></audio>
+            `;
+                        container.appendChild(div);
+                    });
+                }
+            });
+    </script>
+</body>
+
+</html>

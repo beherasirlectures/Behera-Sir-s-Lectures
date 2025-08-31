@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio Lecture Player</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Header Section -->
@@ -17,7 +19,8 @@
                 </div>
                 <div class="header-controls">
                     <div class="search-container">
-                        <input type="text" id="searchInput" class="form-control search-input" placeholder="Search lectures, instructors, topics...">
+                        <input type="text" id="searchInput" class="form-control search-input"
+                            placeholder="Search lectures, instructors, topics...">
                     </div>
                     <select id="sortSelect" class="form-control sort-select">
                         <option value="date">Sort by Date</option>
@@ -51,20 +54,26 @@
                             <p id="currentDate" class="lecture-date"></p>
                         </div>
                         <div class="lecture-actions">
-                            <button id="favoriteBtn" class="btn btn--outline btn--sm favorite-btn" title="Add to favorites">⭐</button>
-                            <button id="bookmarkBtn" class="btn btn--outline btn--sm bookmark-btn" title="Bookmark position">🔖</button>
+                            <button id="favoriteBtn" class="btn btn--outline btn--sm favorite-btn"
+                                title="Add to favorites">⭐</button>
+                            <button id="bookmarkBtn" class="btn btn--outline btn--sm bookmark-btn"
+                                title="Bookmark position">🔖</button>
                         </div>
                     </div>
 
                     <!-- Audio Element -->
                     <audio id="audioElement" preload="metadata"></audio>
 
+                    <!-- Embedded Player Container -->
+                    <div id="embedContainer" style="width: 100%; margin: 10px 0;"></div>
+
                     <!-- Progress Bar -->
                     <div class="progress-section">
                         <div class="progress-container">
                             <div class="progress-track">
                                 <div id="progressFill" class="progress-fill"></div>
-                                <input type="range" id="progressSlider" class="progress-slider" min="0" max="100" value="0">
+                                <input type="range" id="progressSlider" class="progress-slider" min="0" max="100"
+                                    value="0">
                             </div>
                         </div>
                         <div class="time-display">
@@ -88,10 +97,11 @@
                             <span class="control-label">Volume</span>
                             <div class="volume-slider-container">
                                 <span class="volume-icon">🔊</span>
-                                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
+                                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100"
+                                    value="70">
                             </div>
                         </div>
-                        
+
                         <div class="speed-control">
                             <span class="control-label">Speed</span>
                             <select id="speedSelect" class="form-control speed-select">
@@ -125,7 +135,7 @@
                         <span id="lectureCount">0 lectures</span>
                     </div>
                 </div>
-                
+
                 <div id="lectureList" class="lecture-list">
                     <div class="loading-state">
                         <p>Loading lectures...</p>
@@ -200,6 +210,8 @@
         </div>
     </template>
 
+    <script src="drive-audio.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

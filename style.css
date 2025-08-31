@@ -749,18 +749,20 @@ select.form-control {
 .app-header {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  padding: var(--space-20) var(--space-24);
+  padding: var(--space-12) var(--space-24);
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+  background: rgba(var(--color-surface-rgb), 0.85);
 }
 
 .header-content {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: var(--space-32);
+  gap: var(--space-24);
   max-width: var(--container-xl);
   margin: 0 auto;
 }
@@ -915,15 +917,22 @@ select.form-control {
 
 .progress-container {
   margin-bottom: var(--space-8);
+  position: relative;
+  touch-action: none;
 }
 
 .progress-track {
   position: relative;
-  height: 8px;
+  height: 4px;
   background: var(--color-secondary);
   border-radius: var(--radius-full);
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
+  transition: height 0.2s ease;
+}
+
+.progress-track:hover {
+  height: 8px;
 }
 
 .progress-fill {
@@ -934,7 +943,7 @@ select.form-control {
   background: var(--color-primary);
   border-radius: var(--radius-full);
   width: 0%;
-  transition: width 0.1s ease;
+  transition: width 0.05s linear;
 }
 
 .progress-slider {
@@ -948,6 +957,24 @@ select.form-control {
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
+  z-index: 1;
+}
+
+.progress-track::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  transform: translate(50%, -50%) scale(0);
+  transition: transform 0.2s ease;
+}
+
+.progress-track:hover::after {
+  transform: translate(50%, -50%) scale(1);
 }
 
 .progress-slider::-webkit-slider-thumb {
