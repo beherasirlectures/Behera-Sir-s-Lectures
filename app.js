@@ -2,416 +2,778 @@
 class AudioLecturePlayer {
     constructor() {
         this.lectures = [];
+        this.filteredLectures = [];
         this.currentLecture = null;
         this.currentIndex = -1;
-        this.audioElement = document.getElementById('audioElement');
         this.isPlaying = false;
+        this.isShuffling = false;
+        this.repeatMode = 'none'; // 'none', 'one', 'all'
+        this.currentView = 'list';
+        this.currentSection = 'all';
+        this.playbackHistory = [];
+        this.favorites = new Set();
+        this.searchTerm = '';
+        this.sortBy = 'date';
         
         this.initializeApp();
         this.bindEvents();
-        this.loadSampleData();
+        this.loadLectureData();
+        this.initializeTheme();
     }
 
     initializeApp() {
-        // Initialize DOM elements
+        // Get DOM elements
         this.elements = {
-            fileInput: document.getElementById('audioFiles'),
-            uploadBtn: document.getElementById('uploadBtn'),
-            selectedFiles: document.getElementById('selectedFiles'),
-            metadataSection: document.getElementById('metadataSection'),
-            metadataForms: document.getElementById('metadataForms'),
+            // Audio player elements
+            audioElement: document.getElementById('audioElement'),
             playPauseBtn: document.getElementById('playPauseBtn'),
             prevBtn: document.getElementById('prevBtn'),
             nextBtn: document.getElementById('nextBtn'),
+            shuffleBtn: document.getElementById('shuffleBtn'),
+            repeatBtn: document.getElementById('repeatBtn'),
+            favoriteBtn: document.getElementById('favoriteBtn'),
+            bookmarkBtn: document.getElementById('bookmarkBtn'),
+            
+            // Progress elements
             progressSlider: document.getElementById('progressSlider'),
             progressFill: document.getElementById('progressFill'),
             currentTime: document.getElementById('currentTime'),
             totalTime: document.getElementById('totalTime'),
+            
+            // Volume and speed
             volumeSlider: document.getElementById('volumeSlider'),
             speedSelect: document.getElementById('speedSelect'),
+            
+            // Current playing info
             currentTitle: document.getElementById('currentTitle'),
             currentInstructor: document.getElementById('currentInstructor'),
             currentCourse: document.getElementById('currentCourse'),
-            lectureList: document.getElementById('lectureList'),
+            currentDate: document.getElementById('currentDate'),
+            
+            // Library elements
             searchInput: document.getElementById('searchInput'),
             sortSelect: document.getElementById('sortSelect'),
-            exportBtn: document.getElementById('exportBtn'),
-            importFile: document.getElementById('importFile')
+            listViewBtn: document.getElementById('listViewBtn'),
+            gridViewBtn: document.getElementById('gridViewBtn'),
+            lectureList: document.getElementById('lectureList'),
+            lectureCount: document.getElementById('lectureCount'),
+            sectionTitle: document.getElementById('sectionTitle'),
+            
+            // Tab elements
+            allLecturesTab: document.getElementById('allLecturesTab'),
+            recentTab: document.getElementById('recentTab'),
+            favoritesTab: document.getElementById('favoritesTab'),
+            continueTab: document.getElementById('continueTab'),
+            
+            // Theme toggle
+            themeToggle: document.getElementById('themeToggle'),
+            
+            // Modal
+            historyModal: document.getElementById('historyModal')
         };
 
-        // Set initial volume
-        this.audioElement.volume = 0.5;
+        // Set initial audio volume
+        this.elements.audioElement.volume = 0.7;
     }
 
     bindEvents() {
-        // File upload events
-        this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        this.elements.uploadBtn.addEventListener('click', () => this.uploadFiles());
-
-        // Audio player events
+        // Audio player controls
         this.elements.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
         this.elements.prevBtn.addEventListener('click', () => this.previousLecture());
         this.elements.nextBtn.addEventListener('click', () => this.nextLecture());
+        this.elements.shuffleBtn.addEventListener('click', () => this.toggleShuffle());
+        this.elements.repeatBtn.addEventListener('click', () => this.toggleRepeat());
+        this.elements.favoriteBtn.addEventListener('click', () => this.toggleFavorite());
+        this.elements.bookmarkBtn.addEventListener('click', () => this.bookmarkPosition());
+        
+        // Progress and volume controls
         this.elements.progressSlider.addEventListener('input', (e) => this.seekTo(e.target.value));
         this.elements.volumeSlider.addEventListener('input', (e) => this.setVolume(e.target.value));
         this.elements.speedSelect.addEventListener('change', (e) => this.setPlaybackSpeed(e.target.value));
-
+        
         // Audio element events
-        this.audioElement.addEventListener('loadedmetadata', () => this.updateDuration());
-        this.audioElement.addEventListener('timeupdate', () => this.updateProgress());
-        this.audioElement.addEventListener('ended', () => this.handleAudioEnd());
-
-        // Library events
-        this.elements.searchInput.addEventListener('input', (e) => this.filterLectures(e.target.value));
-        this.elements.sortSelect.addEventListener('change', (e) => this.sortLectures(e.target.value));
-
-        // Export/Import events
-        this.elements.exportBtn.addEventListener('click', () => this.exportMetadata());
-        this.elements.importFile.addEventListener('change', (e) => this.importMetadata(e));
+        this.elements.audioElement.addEventListener('loadedmetadata', () => this.updateDuration());
+        this.elements.audioElement.addEventListener('timeupdate', () => this.updateProgress());
+        this.elements.audioElement.addEventListener('ended', () => this.handleAudioEnd());
+        this.elements.audioElement.addEventListener('play', () => this.handlePlay());
+        this.elements.audioElement.addEventListener('pause', () => this.handlePause());
+        
+        // Library controls
+        this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+        this.elements.sortSelect.addEventListener('change', (e) => this.handleSort(e.target.value));
+        this.elements.listViewBtn.addEventListener('click', () => this.setView('list'));
+        this.elements.gridViewBtn.addEventListener('click', () => this.setView('grid'));
+        
+        // Tab navigation
+        this.elements.allLecturesTab.addEventListener('click', () => this.setSection('all'));
+        this.elements.recentTab.addEventListener('click', () => this.setSection('recent'));
+        this.elements.favoritesTab.addEventListener('click', () => this.setSection('favorites'));
+        this.elements.continueTab.addEventListener('click', () => this.setSection('continue'));
+        
+        // Theme toggle
+        this.elements.themeToggle.addEventListener('click', () => this.toggleTheme());
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+        
+        // Modal close
+        if (this.elements.historyModal) {
+            this.elements.historyModal.addEventListener('click', (e) => {
+                if (e.target === this.elements.historyModal || e.target.classList.contains('modal-close')) {
+                    this.elements.historyModal.classList.add('hidden');
+                }
+            });
+        }
     }
 
-    loadSampleData() {
-        // Load sample lectures from provided data
-        const sampleLectures = [
-            {
-                id: "sample-1",
-                filename: "intro-to-ai.mp3",
-                title: "Introduction to Artificial Intelligence",
-                instructor: "Dr. Sarah Johnson",
-                course: "CS 485 - AI Fundamentals",
-                duration: 3240,
-                date: "2025-08-30",
-                description: "Overview of AI concepts, machine learning basics, and current applications in industry",
-                tags: ["artificial intelligence", "machine learning", "computer science"],
-                audioUrl: "",
-                lastPosition: 0
-            },
-            {
-                id: "sample-2", 
-                filename: "power-electronics-basics.mp3",
-                title: "Power Electronics Fundamentals",
-                instructor: "Prof. Rajesh Kumar",
-                course: "EE 420 - Power Electronics",
-                duration: 2880,
-                date: "2025-08-29",
-                description: "Basic principles of power electronics, semiconductors, and switching circuits",
-                tags: ["power electronics", "semiconductors", "electrical engineering"],
-                audioUrl: "",
-                lastPosition: 0
-            },
-            {
-                id: "sample-3",
-                filename: "control-theory-intro.mp3", 
-                title: "Introduction to Control Theory",
-                instructor: "Dr. Priya Sharma",
-                course: "EE 380 - Control Systems",
-                duration: 3600,
-                date: "2025-08-28",
-                description: "Fundamentals of control systems, feedback loops, and system stability",
-                tags: ["control theory", "feedback systems", "engineering"],
-                audioUrl: "",
-                lastPosition: 0
+    loadLectureData() {
+        // Load the provided lecture data
+        const lectureData = {
+            "lectures": [
+                {
+                    "id": "lecture_20250828_001",
+                    "filename": "new.mp3",
+                    "title": "Detailed Description of Golok Dham - SB 3.16.18",
+                    "instructor": "HG Lila Purushottam Prabhu",
+                    "course": "Srimad Bhagavatam",
+                    "date": "28th Aug 2025",
+                    "based_on": "SB 3.16.18",
+                    "key": "Detailed description of Golok Dham",
+                    "description": "A comprehensive explanation of the spiritual realm of Goloka Vrindavan, discussing the eternal nature of spiritual relationships and the divine activities that take place in the spiritual world. The lecture covers the differences between material and spiritual existence, emphasizing the eternal occupational duties of devotees in the spiritual realm.",
+                    "video_link": "https://youtu.be/sR6yyeQJduw?si=dsl1NTa9AV1Znf5h",
+                    "duration": 3240,
+                    "tags": ["goloka", "spiritual world", "srimad bhagavatam", "vrindavan", "eternal dharma"],
+                    "audioUrl": "audio/SB-3.16.18-golok-dhaam.mp3",
+                    "lastPosition": 0,
+                    "isFavorite": false,
+                    "playCount": 0,
+                    "lastPlayed": null
+                },
+                {
+                    "id": "lecture_20250827_001",
+                    "filename": "bhakti-principles.mp3",
+                    "title": "Nine Processes of Devotional Service",
+                    "instructor": "HG Devotional Acharya Prabhu",
+                    "course": "Bhakti Yoga Principles",
+                    "date": "27th Aug 2025",
+                    "based_on": "SB 7.5.23",
+                    "key": "Sravanam kirtanam vishnoh - Nine fold path of devotion",
+                    "description": "Detailed explanation of the nine processes of devotional service as described by Prahlad Maharaj. This lecture covers hearing, chanting, remembering, serving the lotus feet, worshiping, praying, serving, friendship, and surrender.",
+                    "duration": 2880,
+                    "tags": ["bhakti yoga", "devotional service", "nine processes", "prahlad maharaj"],
+                    "audioUrl": "audio/bhakti-principles.mp3",
+                    "lastPosition": 450,
+                    "isFavorite": true,
+                    "playCount": 3,
+                    "lastPlayed": "2025-08-29"
+                },
+                {
+                    "id": "lecture_20250826_001",
+                    "filename": "krishna-consciousness-basics.mp3",
+                    "title": "Introduction to Krishna Consciousness",
+                    "instructor": "HG Spiritual Guide Prabhu",
+                    "course": "Bhagavad Gita As It Is",
+                    "date": "26th Aug 2025",
+                    "based_on": "BG 2.13",
+                    "key": "Understanding the eternal nature of the soul",
+                    "description": "An introductory lecture on Krishna consciousness covering the basic principles of spiritual life, the nature of the soul, and the importance of developing a relationship with Krishna.",
+                    "duration": 3600,
+                    "tags": ["krishna consciousness", "bhagavad gita", "soul", "spiritual life"],
+                    "audioUrl": "audio/krishna-consciousness-basics.mp3",
+                    "lastPosition": 0,
+                    "isFavorite": false,
+                    "playCount": 1,
+                    "lastPlayed": "2025-08-26"
+                },
+                {
+                    "id": "lecture_20250825_001",
+                    "filename": "chanting-holy-names.mp3",
+                    "title": "The Power of Chanting the Holy Names",
+                    "instructor": "HG Kirtan Master Prabhu",
+                    "course": "Nama Tattva",
+                    "date": "25th Aug 2025",
+                    "based_on": "CC Adi 17.21",
+                    "key": "Harer nama harer nama - Only the holy name",
+                    "description": "This lecture explains the supreme importance of chanting the holy names of Krishna in this age of Kali. Discusses the process, benefits, and spiritual significance of the Hare Krishna maha-mantra.",
+                    "duration": 2700,
+                    "tags": ["holy names", "chanting", "hare krishna", "kali yuga", "nama tattva"],
+                    "audioUrl": "audio/chanting-holy-names.mp3",
+                    "lastPosition": 1200,
+                    "isFavorite": true,
+                    "playCount": 5,
+                    "lastPlayed": "2025-08-30"
+                },
+                {
+                    "id": "lecture_20250824_001",
+                    "filename": "guru-tattva-principles.mp3",
+                    "title": "Understanding Guru Tattva - The Science of Disciplic Succession",
+                    "instructor": "HG Learned Scholar Prabhu",
+                    "course": "Guru Tattva",
+                    "date": "24th Aug 2025",
+                    "based_on": "BG 4.34",
+                    "key": "Tad viddhi pranipatena - Approach the guru with submission",
+                    "description": "A comprehensive explanation of the guru-disciple relationship, the importance of disciplic succession, and how spiritual knowledge is transmitted through authorized channels.",
+                    "duration": 4200,
+                    "tags": ["guru tattva", "disciplic succession", "spiritual master", "parampara"],
+                    "audioUrl": "audio/guru-tattva-principles.mp3",
+                    "lastPosition": 0,
+                    "isFavorite": false,
+                    "playCount": 2,
+                    "lastPlayed": "2025-08-25"
+                }
+            ]
+        };
+
+        this.lectures = lectureData.lectures;
+        
+        // Initialize favorites from data
+        this.lectures.forEach(lecture => {
+            if (lecture.isFavorite) {
+                this.favorites.add(lecture.id);
             }
-        ];
-
-        this.lectures = sampleLectures;
-        this.renderLectureList();
+        });
+        
+        // Initialize playback history
+        this.playbackHistory = this.lectures
+            .filter(lecture => lecture.lastPlayed)
+            .sort((a, b) => new Date(b.lastPlayed) - new Date(a.lastPlayed));
+        
+        this.filterAndRenderLectures();
     }
 
-    handleFileSelect(event) {
-        const files = Array.from(event.target.files);
-        if (files.length === 0) return;
-
-        this.displaySelectedFiles(files);
-        this.elements.uploadBtn.classList.remove('hidden');
+    initializeTheme() {
+        // Check system preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+            document.documentElement.setAttribute('data-color-scheme', 'dark');
+            this.elements.themeToggle.textContent = '☀️';
+        } else {
+            this.elements.themeToggle.textContent = '🌙';
+        }
     }
 
-    displaySelectedFiles(files) {
-        this.elements.selectedFiles.innerHTML = '';
-        this.elements.selectedFiles.classList.remove('hidden');
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-color-scheme');
+        if (currentTheme === 'dark') {
+            document.documentElement.setAttribute('data-color-scheme', 'light');
+            this.elements.themeToggle.textContent = '🌙';
+        } else {
+            document.documentElement.setAttribute('data-color-scheme', 'dark');
+            this.elements.themeToggle.textContent = '☀️';
+        }
+    }
 
-        files.forEach(file => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.innerHTML = `
-                <div class="file-info">
-                    <h4>${file.name}</h4>
-                    <p>${this.formatFileSize(file.size)} • ${file.type}</p>
+    handleSearch(searchTerm) {
+        this.searchTerm = searchTerm.toLowerCase();
+        this.filterAndRenderLectures();
+    }
+
+    handleSort(sortBy) {
+        this.sortBy = sortBy;
+        this.filterAndRenderLectures();
+    }
+
+    setView(view) {
+        this.currentView = view;
+        
+        // Update view buttons
+        this.elements.listViewBtn.classList.toggle('active', view === 'list');
+        this.elements.gridViewBtn.classList.toggle('active', view === 'grid');
+        
+        // Update lecture list class
+        this.elements.lectureList.classList.toggle('grid-view', view === 'grid');
+        
+        this.renderLectures();
+    }
+
+    setSection(section) {
+        this.currentSection = section;
+        
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        this.elements[section + (section === 'all' ? 'Lectures' : '') + 'Tab'].classList.add('active');
+        
+        // Update section title
+        const titles = {
+            all: 'All Lectures',
+            recent: 'Recently Played',
+            favorites: 'Favorite Lectures',
+            continue: 'Continue Listening'
+        };
+        this.elements.sectionTitle.textContent = titles[section];
+        
+        this.filterAndRenderLectures();
+    }
+
+    filterAndRenderLectures() {
+        let lectures = [...this.lectures];
+        
+        // Filter by section
+        switch (this.currentSection) {
+            case 'recent':
+                lectures = this.playbackHistory;
+                break;
+            case 'favorites':
+                lectures = lectures.filter(lecture => this.favorites.has(lecture.id));
+                break;
+            case 'continue':
+                lectures = lectures.filter(lecture => lecture.lastPosition > 0 && lecture.lastPosition < lecture.duration - 30);
+                break;
+            case 'all':
+            default:
+                // Keep all lectures
+                break;
+        }
+        
+        // Apply search filter
+        if (this.searchTerm) {
+            lectures = lectures.filter(lecture => 
+                lecture.title.toLowerCase().includes(this.searchTerm) ||
+                lecture.instructor.toLowerCase().includes(this.searchTerm) ||
+                lecture.course.toLowerCase().includes(this.searchTerm) ||
+                lecture.description.toLowerCase().includes(this.searchTerm) ||
+                lecture.tags.some(tag => tag.toLowerCase().includes(this.searchTerm))
+            );
+        }
+        
+        // Apply sorting
+        lectures.sort((a, b) => {
+            switch (this.sortBy) {
+                case 'title':
+                    return a.title.localeCompare(b.title);
+                case 'instructor':
+                    return a.instructor.localeCompare(b.instructor);
+                case 'duration':
+                    return b.duration - a.duration;
+                case 'date':
+                default:
+                    return new Date(this.parseDate(b.date)) - new Date(this.parseDate(a.date));
+            }
+        });
+        
+        this.filteredLectures = lectures;
+        this.renderLectures();
+    }
+
+    parseDate(dateStr) {
+        // Convert "28th Aug 2025" format to standard date
+        const months = {
+            'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+            'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        
+        const parts = dateStr.split(' ');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const month = months[parts[1]];
+            const year = parseInt(parts[2]);
+            return new Date(year, month, day);
+        }
+        return new Date(dateStr);
+    }
+
+    renderLectures() {
+        const lectures = this.filteredLectures;
+        this.elements.lectureCount.textContent = `${lectures.length} lecture${lectures.length !== 1 ? 's' : ''}`;
+        
+        if (lectures.length === 0) {
+            this.elements.lectureList.innerHTML = `
+                <div class="empty-state">
+                    <p>No lectures found. Try adjusting your search or filters.</p>
                 </div>
-                <div class="status status--info">Ready</div>
             `;
-            this.elements.selectedFiles.appendChild(fileItem);
-        });
-    }
-
-    async uploadFiles() {
-        const files = Array.from(this.elements.fileInput.files);
-        const pendingLectures = [];
-
-        for (const file of files) {
-            const audioUrl = URL.createObjectURL(file);
-            const duration = await this.getAudioDuration(audioUrl);
-            
-            const lecture = {
-                id: `lecture-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                filename: file.name,
-                title: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
-                instructor: "",
-                course: "",
-                duration: duration,
-                date: new Date().toISOString().split('T')[0],
-                description: "",
-                tags: [],
-                audioUrl: audioUrl,
-                lastPosition: 0
-            };
-
-            pendingLectures.push(lecture);
-        }
-
-        this.showMetadataEditor(pendingLectures);
-    }
-
-    getAudioDuration(audioUrl) {
-        return new Promise((resolve) => {
-            const tempAudio = new Audio(audioUrl);
-            tempAudio.addEventListener('loadedmetadata', () => {
-                resolve(tempAudio.duration);
-            });
-            tempAudio.addEventListener('error', () => {
-                resolve(0); // Default duration if error
-            });
-        });
-    }
-
-    showMetadataEditor(pendingLectures) {
-        this.elements.metadataSection.classList.remove('hidden');
-        this.elements.metadataForms.innerHTML = '';
-
-        pendingLectures.forEach((lecture, index) => {
-            const formTemplate = document.getElementById('metadataFormTemplate');
-            const formClone = formTemplate.content.cloneNode(true);
-            
-            // Populate form
-            formClone.querySelector('.form-title').textContent = `Edit Metadata: ${lecture.filename}`;
-            formClone.querySelector('.title-input').value = lecture.title;
-            formClone.querySelector('.instructor-input').value = lecture.instructor;
-            formClone.querySelector('.course-input').value = lecture.course;
-            formClone.querySelector('.date-input').value = lecture.date;
-            formClone.querySelector('.description-input').value = lecture.description;
-            formClone.querySelector('.tags-input').value = lecture.tags.join(', ');
-
-            // Add save event
-            const saveBtn = formClone.querySelector('.save-metadata-btn');
-            saveBtn.addEventListener('click', () => this.saveMetadata(index, pendingLectures));
-
-            this.elements.metadataForms.appendChild(formClone);
-        });
-
-        // Store pending lectures temporarily
-        this.pendingLectures = pendingLectures;
-    }
-
-    saveMetadata(index, pendingLectures) {
-        const forms = this.elements.metadataForms.querySelectorAll('.metadata-form');
-        const form = forms[index];
-        
-        const lecture = pendingLectures[index];
-        lecture.title = form.querySelector('.title-input').value || lecture.filename;
-        lecture.instructor = form.querySelector('.instructor-input').value;
-        lecture.course = form.querySelector('.course-input').value;
-        lecture.date = form.querySelector('.date-input').value;
-        lecture.description = form.querySelector('.description-input').value;
-        lecture.tags = form.querySelector('.tags-input').value
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(tag => tag.length > 0);
-
-        // Add to lectures array
-        this.lectures.push(lecture);
-        
-        // Remove the form
-        form.remove();
-        
-        // If all forms are processed, hide metadata section and refresh library
-        if (this.elements.metadataForms.children.length === 0) {
-            this.elements.metadataSection.classList.add('hidden');
-            this.clearUploadSection();
-            this.renderLectureList();
-        }
-    }
-
-    clearUploadSection() {
-        this.elements.fileInput.value = '';
-        this.elements.selectedFiles.innerHTML = '';
-        this.elements.selectedFiles.classList.add('hidden');
-        this.elements.uploadBtn.classList.add('hidden');
-    }
-
-    renderLectureList() {
-        const filteredLectures = this.getFilteredAndSortedLectures();
-        this.elements.lectureList.innerHTML = '';
-
-        if (filteredLectures.length === 0) {
-            const emptyState = document.createElement('div');
-            emptyState.className = 'empty-state';
-            emptyState.innerHTML = '<p>No lectures found. Try adjusting your search or upload new files.</p>';
-            this.elements.lectureList.appendChild(emptyState);
             return;
         }
-
-        filteredLectures.forEach((lecture, index) => {
-            const lectureTemplate = document.getElementById('lectureItemTemplate');
-            const lectureClone = lectureTemplate.content.cloneNode(true);
+        
+        const templateId = this.currentView === 'grid' ? 'lectureGridItemTemplate' : 'lectureItemTemplate';
+        const template = document.getElementById(templateId);
+        
+        this.elements.lectureList.innerHTML = '';
+        
+        lectures.forEach(lecture => {
+            const lectureElement = template.content.cloneNode(true);
+            const lectureItem = lectureElement.querySelector(this.currentView === 'grid' ? '.lecture-grid-item' : '.lecture-item');
             
-            // Populate lecture item
-            lectureClone.querySelector('.lecture-title').textContent = lecture.title;
-            lectureClone.querySelector('.lecture-instructor').textContent = lecture.instructor || 'Unknown Instructor';
-            lectureClone.querySelector('.lecture-course').textContent = lecture.course || 'No Course';
-            lectureClone.querySelector('.duration').textContent = this.formatTime(lecture.duration);
-            lectureClone.querySelector('.date').textContent = lecture.date;
+            // Populate lecture information
+            lectureElement.querySelector('.lecture-title').textContent = lecture.title;
+            lectureElement.querySelector('.lecture-instructor').textContent = lecture.instructor;
+            lectureElement.querySelector('.lecture-course').textContent = lecture.course;
+            lectureElement.querySelector('.duration').textContent = this.formatTime(lecture.duration);
+            lectureElement.querySelector('.date').textContent = lecture.date;
             
-            // Add tags
-            const tagsContainer = lectureClone.querySelector('.tags');
-            lecture.tags.forEach(tag => {
-                const tagSpan = document.createElement('span');
-                tagSpan.className = 'tag';
-                tagSpan.textContent = tag;
-                tagsContainer.appendChild(tagSpan);
-            });
-
-            // Add event listeners
-            const playBtn = lectureClone.querySelector('.play-btn');
-            const editBtn = lectureClone.querySelector('.edit-btn');
-            const lectureItem = lectureClone.querySelector('.lecture-item');
+            // Add tags for list view
+            if (this.currentView === 'list' && lecture.tags) {
+                const tagsContainer = lectureElement.querySelector('.tags');
+                lecture.tags.forEach(tag => {
+                    const tagElement = document.createElement('span');
+                    tagElement.className = 'tag';
+                    tagElement.textContent = tag;
+                    tagsContainer.appendChild(tagElement);
+                });
+            }
+            
+            // Add progress indicator
+            const progressIndicator = lectureElement.querySelector('.progress-indicator') || lectureElement.querySelector('.progress-indicator-grid');
+            if (progressIndicator && lecture.lastPosition > 0) {
+                const progressPercentage = (lecture.lastPosition / lecture.duration) * 100;
+                const progressFill = progressIndicator.querySelector('.progress-fill-small');
+                if (progressFill) {
+                    progressFill.style.width = `${progressPercentage}%`;
+                }
+                
+                const progressText = progressIndicator.querySelector('.progress-text');
+                if (progressText) {
+                    progressText.textContent = `${Math.round(progressPercentage)}%`;
+                }
+            }
+            
+            // Set up event listeners
+            const playBtn = lectureElement.querySelector('.play-btn');
+            const favoriteBtn = lectureElement.querySelector('.favorite-btn');
             
             playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.playLecture(lecture);
             });
             
-            editBtn.addEventListener('click', (e) => {
+            favoriteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.editLecture(lecture);
+                this.toggleLectureFavorite(lecture);
             });
             
-            // Make entire lecture item clickable
-            lectureItem.addEventListener('click', () => this.playLecture(lecture));
-            lectureItem.style.cursor = 'pointer';
+            // Update favorite button state
+            if (this.favorites.has(lecture.id)) {
+                favoriteBtn.classList.add('active');
+            }
             
-            // Mark current playing lecture
+            // Make entire item clickable
+            lectureItem.addEventListener('click', () => this.playLecture(lecture));
+            
+            // Mark currently playing lecture
             if (this.currentLecture && this.currentLecture.id === lecture.id) {
                 lectureItem.classList.add('playing');
-                playBtn.textContent = this.isPlaying ? 'Pause' : 'Play';
+                playBtn.textContent = this.isPlaying ? '⏸️' : '▶️';
             }
-
-            this.elements.lectureList.appendChild(lectureClone);
+            
+            this.elements.lectureList.appendChild(lectureElement);
         });
     }
 
     playLecture(lecture) {
-        if (!lecture.audioUrl) {
-            alert('This is a sample lecture without audio. Upload your own audio files to play them with full functionality. The player interface is fully functional for uploaded files.');
-            
-            // Still update the UI to show selection
-            this.currentLecture = lecture;
-            this.currentIndex = this.lectures.findIndex(l => l.id === lecture.id);
-            this.updatePlayerInfo();
-            this.updateNavigationButtons();
-            this.renderLectureList(); // Re-render to show playing state
-            return;
-        }
-
+        // Set current lecture
         this.currentLecture = lecture;
         this.currentIndex = this.lectures.findIndex(l => l.id === lecture.id);
         
-        this.audioElement.src = lecture.audioUrl;
-        this.audioElement.currentTime = lecture.lastPosition || 0;
+        // Update playback history
+        this.addToPlaybackHistory(lecture);
         
+        // Update UI immediately
         this.updatePlayerInfo();
-        this.audioElement.play();
-        this.isPlaying = true;
-        this.updatePlayPauseButton();
         this.updateNavigationButtons();
-        this.renderLectureList(); // Re-render to show playing state
+        
+        // Simulate audio loading and playing
+        this.simulateAudioPlayback(lecture);
+        
+        // Re-render to show playing state
+        this.renderLectures();
+        
+        // Scroll to audio player section
+        document.querySelector('.audio-player-section').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+        });
+    }
+
+    // simulateAudioPlayback(lecture) {
+    //     // Since we don't have actual audio files, we'll show a message and update the UI
+    //     if (!lecture.audioUrl || !lecture.audioUrl.startsWith('http')) {
+    //         this.showPlaybackMessage(lecture);
+    //     }
+        
+    //     // Set playing state
+    //     this.isPlaying = true;
+    //     this.updatePlayPauseButton();
+        
+    //     // Simulate duration and current time
+    //     this.elements.totalTime.textContent = this.formatTime(lecture.duration);
+    //     this.elements.currentTime.textContent = this.formatTime(lecture.lastPosition || 0);
+        
+    //     // Update progress based on last position
+    //     if (lecture.lastPosition > 0) {
+    //         const progress = (lecture.lastPosition / lecture.duration) * 100;
+    //         this.elements.progressFill.style.width = `${progress}%`;
+    //         this.elements.progressSlider.value = progress;
+    //     } else {
+    //         this.elements.progressFill.style.width = '0%';
+    //         this.elements.progressSlider.value = 0;
+    //     }
+    // }
+    simulateAudioPlayback(lecture) {
+        // Check if the lecture has a valid audio file
+        if (!lecture.filename) {
+            console.error('Audio file is missing for lecture:', lecture);
+            alert('Audio file is not available for this lecture.');
+            return;
+        }
+    
+        // Set the audio source to the file from the metadata
+        const audioPath = `audio/${lecture.filename}`;
+        this.elements.audioElement.src = audioPath;
+    
+        // Update the UI with lecture details
+        this.updatePlayerInfo();
+    
+        // Play the audio
+        this.elements.audioElement.play().then(() => {
+            this.isPlaying = true;
+            this.updatePlayPauseButton();
+        }).catch((error) => {
+            console.error('Error playing audio:', error);
+            alert('Failed to play the audio file. Please check if the file exists.');
+        });
+    
+        // Update progress and duration when metadata is loaded
+        this.elements.audioElement.addEventListener('loadedmetadata', () => {
+            this.elements.totalTime.textContent = this.formatTime(this.elements.audioElement.duration);
+            this.updateProgress();
+        });
+    
+        // Update progress as the audio plays
+        this.elements.audioElement.addEventListener('timeupdate', () => {
+            this.updateProgress();
+        });
+    
+        // Handle audio end
+        this.elements.audioElement.addEventListener('ended', () => {
+            this.handleAudioEnd();
+        });
+    }
+
+    showPlaybackMessage(lecture) {
+        // Create a temporary notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: var(--color-primary);
+            color: var(--color-btn-primary-text);
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            max-width: 400px;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        notification.innerHTML = `
+            <strong>Now Playing (Demo Mode)</strong><br>
+            "${lecture.title}"<br>
+            <small>By ${lecture.instructor}</small><br>
+            <small style="opacity: 0.8;">In a real application, the audio would play here.</small>
+        `;
+        
+        // Add animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+            if (style.parentNode) {
+                style.parentNode.removeChild(style);
+            }
+        }, 4000);
+    }
+
+    addToPlaybackHistory(lecture) {
+        // Remove from history if already exists
+        this.playbackHistory = this.playbackHistory.filter(l => l.id !== lecture.id);
+        
+        // Add to beginning of history
+        const lectureWithTimestamp = { ...lecture, lastPlayed: new Date().toISOString().split('T')[0] };
+        this.playbackHistory.unshift(lectureWithTimestamp);
+        
+        // Keep only last 50 items
+        this.playbackHistory = this.playbackHistory.slice(0, 50);
+        
+        // Update play count
+        lecture.playCount = (lecture.playCount || 0) + 1;
     }
 
     togglePlayPause() {
         if (!this.currentLecture) return;
-
-        if (this.isPlaying) {
-            this.audioElement.pause();
-            this.isPlaying = false;
-        } else {
-            this.audioElement.play();
-            this.isPlaying = true;
-        }
         
+        this.isPlaying = !this.isPlaying;
         this.updatePlayPauseButton();
-        this.renderLectureList();
+        this.renderLectures();
+        
+        if (this.isPlaying) {
+            this.elements.audioElement.play().catch(() => {
+                // Ignore errors for demo
+            });
+        } else {
+            this.elements.audioElement.pause();
+        }
     }
 
     previousLecture() {
-        if (this.currentIndex > 0) {
+        if (this.isShuffling) {
+            this.playRandomLecture();
+        } else if (this.currentIndex > 0) {
             this.playLecture(this.lectures[this.currentIndex - 1]);
         }
     }
 
     nextLecture() {
-        if (this.currentIndex < this.lectures.length - 1) {
+        if (this.isShuffling) {
+            this.playRandomLecture();
+        } else if (this.currentIndex < this.lectures.length - 1) {
             this.playLecture(this.lectures[this.currentIndex + 1]);
         }
     }
 
-    updatePlayerInfo() {
+    playRandomLecture() {
+        const availableLectures = this.lectures.filter(l => l.id !== this.currentLecture?.id);
+        if (availableLectures.length > 0) {
+            const randomIndex = Math.floor(Math.random() * availableLectures.length);
+            this.playLecture(availableLectures[randomIndex]);
+        }
+    }
+
+    toggleShuffle() {
+        this.isShuffling = !this.isShuffling;
+        this.elements.shuffleBtn.classList.toggle('active', this.isShuffling);
+    }
+
+    toggleRepeat() {
+        const modes = ['none', 'one', 'all'];
+        const currentIndex = modes.indexOf(this.repeatMode);
+        this.repeatMode = modes[(currentIndex + 1) % modes.length];
+        
+        this.elements.repeatBtn.classList.toggle('active', this.repeatMode !== 'none');
+        
+        // Update button text based on mode
+        const repeatIcons = { none: '🔁', one: '🔂', all: '🔁' };
+        this.elements.repeatBtn.textContent = repeatIcons[this.repeatMode];
+    }
+
+    toggleFavorite() {
+        if (!this.currentLecture) return;
+        this.toggleLectureFavorite(this.currentLecture);
+    }
+
+    toggleLectureFavorite(lecture) {
+        if (this.favorites.has(lecture.id)) {
+            this.favorites.delete(lecture.id);
+            lecture.isFavorite = false;
+        } else {
+            this.favorites.add(lecture.id);
+            lecture.isFavorite = true;
+        }
+        
+        // Update UI
+        if (this.currentLecture && this.currentLecture.id === lecture.id) {
+            this.elements.favoriteBtn.classList.toggle('active', lecture.isFavorite);
+        }
+        
+        this.renderLectures();
+    }
+
+    bookmarkPosition() {
         if (!this.currentLecture) return;
         
-        this.elements.currentTitle.textContent = this.currentLecture.title;
-        this.elements.currentInstructor.textContent = this.currentLecture.instructor || 'Unknown Instructor';
-        this.elements.currentCourse.textContent = this.currentLecture.course || 'No Course';
-    }
-
-    updateDuration() {
-        this.elements.totalTime.textContent = this.formatTime(this.audioElement.duration);
-    }
-
-    updateProgress() {
-        if (!this.audioElement.duration) return;
-
-        const progress = (this.audioElement.currentTime / this.audioElement.duration) * 100;
-        this.elements.progressFill.style.width = `${progress}%`;
-        this.elements.progressSlider.value = progress;
-        this.elements.currentTime.textContent = this.formatTime(this.audioElement.currentTime);
-
-        // Save progress
-        if (this.currentLecture) {
-            this.currentLecture.lastPosition = this.audioElement.currentTime;
-        }
+        // In a real application, this would bookmark the current audio position
+        this.elements.bookmarkBtn.classList.add('active');
+        
+        // Show temporary feedback
+        const originalText = this.elements.bookmarkBtn.textContent;
+        this.elements.bookmarkBtn.textContent = '✓';
+        setTimeout(() => {
+            this.elements.bookmarkBtn.textContent = originalText;
+            this.elements.bookmarkBtn.classList.remove('active');
+        }, 1500);
     }
 
     seekTo(value) {
-        if (!this.audioElement.duration) return;
+        if (!this.currentLecture) return;
         
-        const time = (value / 100) * this.audioElement.duration;
-        this.audioElement.currentTime = time;
+        const time = (value / 100) * this.currentLecture.duration;
+        this.currentLecture.lastPosition = time;
+        
+        this.elements.currentTime.textContent = this.formatTime(time);
+        this.elements.progressFill.style.width = `${value}%`;
+        
+        // In a real application, this would seek the audio element
+        if (this.elements.audioElement.duration) {
+            this.elements.audioElement.currentTime = time;
+        }
     }
 
     setVolume(value) {
-        this.audioElement.volume = value / 100;
+        this.elements.audioElement.volume = value / 100;
+        
+        // Update volume icon based on level
+        const volumeIcon = document.querySelector('.volume-icon');
+        if (volumeIcon) {
+            if (value == 0) volumeIcon.textContent = '🔇';
+            else if (value < 30) volumeIcon.textContent = '🔈';
+            else if (value < 70) volumeIcon.textContent = '🔉';
+            else volumeIcon.textContent = '🔊';
+        }
     }
 
     setPlaybackSpeed(speed) {
-        this.audioElement.playbackRate = parseFloat(speed);
+        this.elements.audioElement.playbackRate = parseFloat(speed);
     }
 
-    handleAudioEnd() {
-        this.isPlaying = false;
-        this.updatePlayPauseButton();
-        
-        // Auto-play next lecture if available
-        if (this.currentIndex < this.lectures.length - 1) {
-            this.nextLecture();
+    updatePlayerInfo() {
+        if (!this.currentLecture) {
+            this.elements.currentTitle.textContent = 'Select a lecture to start playing';
+            this.elements.currentInstructor.textContent = '';
+            this.elements.currentCourse.textContent = '';
+            this.elements.currentDate.textContent = '';
+            return;
         }
+        
+        this.elements.currentTitle.textContent = this.currentLecture.title;
+        this.elements.currentInstructor.textContent = `By ${this.currentLecture.instructor}`;
+        this.elements.currentCourse.textContent = this.currentLecture.course;
+        this.elements.currentDate.textContent = this.currentLecture.date;
+        
+        // Update favorite button state
+        this.elements.favoriteBtn.classList.toggle('active', this.favorites.has(this.currentLecture.id));
+    }
+
+    updateDuration() {
+        if (this.currentLecture) {
+            this.elements.totalTime.textContent = this.formatTime(this.currentLecture.duration);
+        }
+    }
+
+    updateProgress() {
+        if (!this.currentLecture || !this.elements.audioElement.duration) return;
+        
+        const progress = (this.elements.audioElement.currentTime / this.elements.audioElement.duration) * 100;
+        this.elements.progressFill.style.width = `${progress}%`;
+        this.elements.progressSlider.value = progress;
+        this.elements.currentTime.textContent = this.formatTime(this.elements.audioElement.currentTime);
+        
+        // Save progress
+        this.currentLecture.lastPosition = this.elements.audioElement.currentTime;
     }
 
     updatePlayPauseButton() {
@@ -419,113 +781,74 @@ class AudioLecturePlayer {
     }
 
     updateNavigationButtons() {
-        this.elements.prevBtn.disabled = this.currentIndex <= 0;
-        this.elements.nextBtn.disabled = this.currentIndex >= this.lectures.length - 1;
+        this.elements.prevBtn.disabled = !this.isShuffling && this.currentIndex <= 0;
+        this.elements.nextBtn.disabled = !this.isShuffling && this.currentIndex >= this.lectures.length - 1;
     }
 
-    filterLectures(searchTerm) {
-        // Trigger re-render with current search term
-        this.renderLectureList();
+    handlePlay() {
+        this.isPlaying = true;
+        this.updatePlayPauseButton();
     }
 
-    sortLectures(sortBy) {
-        // Trigger re-render with current sort option
-        this.renderLectureList();
+    handlePause() {
+        this.isPlaying = false;
+        this.updatePlayPauseButton();
     }
 
-    getFilteredAndSortedLectures() {
-        let filtered = [...this.lectures];
+    handleAudioEnd() {
+        this.isPlaying = false;
+        this.updatePlayPauseButton();
         
-        // Apply search filter
-        const searchTerm = this.elements.searchInput.value.toLowerCase().trim();
-        if (searchTerm) {
-            filtered = filtered.filter(lecture => 
-                lecture.title.toLowerCase().includes(searchTerm) ||
-                lecture.instructor.toLowerCase().includes(searchTerm) ||
-                lecture.course.toLowerCase().includes(searchTerm) ||
-                lecture.description.toLowerCase().includes(searchTerm) ||
-                lecture.tags.some(tag => tag.toLowerCase().includes(searchTerm))
-            );
+        // Handle repeat modes
+        if (this.repeatMode === 'one') {
+            this.playLecture(this.currentLecture);
+        } else if (this.repeatMode === 'all' || this.currentIndex < this.lectures.length - 1) {
+            this.nextLecture();
         }
-
-        // Apply sorting
-        const sortBy = this.elements.sortSelect.value;
-        filtered.sort((a, b) => {
-            switch (sortBy) {
-                case 'title':
-                    return a.title.localeCompare(b.title);
-                case 'instructor':
-                    return (a.instructor || '').localeCompare(b.instructor || '');
-                case 'duration':
-                    return b.duration - a.duration;
-                case 'date':
-                default:
-                    return new Date(b.date) - new Date(a.date);
-            }
-        });
-
-        return filtered;
     }
 
-    editLecture(lecture) {
-        this.showMetadataEditor([{...lecture}]); // Clone the lecture object
-        // Remove the original lecture temporarily
-        this.lectures = this.lectures.filter(l => l.id !== lecture.id);
-        this.renderLectureList();
-    }
-
-    exportMetadata() {
-        const data = {
-            lectures: this.lectures.map(lecture => ({
-                ...lecture,
-                audioUrl: '' // Don't export blob URLs
-            })),
-            exportDate: new Date().toISOString()
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
+    handleKeyboardShortcuts(e) {
+        // Only handle shortcuts when not typing in input fields
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `lecture-metadata-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        URL.revokeObjectURL(url);
-    }
-
-    importMetadata(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (data.lectures && Array.isArray(data.lectures)) {
-                    // Merge with existing lectures (without audioUrl)
-                    const importedLectures = data.lectures.map(lecture => ({
-                        ...lecture,
-                        id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        audioUrl: '' // Clear blob URLs from import
-                    }));
-                    
-                    this.lectures = [...this.lectures, ...importedLectures];
-                    this.renderLectureList();
-                    alert(`Imported ${importedLectures.length} lectures successfully!`);
-                } else {
-                    alert('Invalid metadata file format.');
-                }
-            } catch (error) {
-                alert('Error reading metadata file: ' + error.message);
-            }
-        };
-        reader.readAsText(file);
-        
-        // Clear the input
-        event.target.value = '';
+        switch (e.code) {
+            case 'Space':
+                e.preventDefault();
+                this.togglePlayPause();
+                break;
+            case 'ArrowLeft':
+                e.preventDefault();
+                this.previousLecture();
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                this.nextLecture();
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                const currentVolume = parseInt(this.elements.volumeSlider.value);
+                this.elements.volumeSlider.value = Math.min(100, currentVolume + 10);
+                this.setVolume(this.elements.volumeSlider.value);
+                break;
+            case 'ArrowDown':
+                e.preventDefault();
+                const currentVol = parseInt(this.elements.volumeSlider.value);
+                this.elements.volumeSlider.value = Math.max(0, currentVol - 10);
+                this.setVolume(this.elements.volumeSlider.value);
+                break;
+            case 'KeyF':
+                e.preventDefault();
+                this.toggleFavorite();
+                break;
+            case 'KeyS':
+                e.preventDefault();
+                this.toggleShuffle();
+                break;
+            case 'KeyR':
+                e.preventDefault();
+                this.toggleRepeat();
+                break;
+        }
     }
 
     formatTime(seconds) {
@@ -539,16 +862,6 @@ class AudioLecturePlayer {
             return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
         return `${minutes}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 }
 
