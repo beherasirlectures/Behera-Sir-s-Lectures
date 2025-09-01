@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri Chaitanya Mahaprabhu's South India Tour</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LeafletJS for the map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <!-- Google Fonts for a thematic feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Laila:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FFF8E1; /* A light cream background */
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+            z-index: 10;
+        }
+        .sidebar-title, .leaflet-popup-content-wrapper h3, #gemini-modal-title {
+            font-family: 'Laila', serif;
+            color: #D84315; /* Deep orange */
+        }
+        .sidebar {
+            height: 100vh;
+            overflow-y: auto;
+            background-color: #FFECB3; /* Light amber */
+            border-right: 2px solid #FFA000; /* Amber border */
+            z-index: 20;
+        }
+        .place-item {
+            cursor: pointer;
+            padding: 12px 16px;
+            border-bottom: 1px solid #FFD54F; /* Lighter amber */
+            transition: background-color 0.3s ease;
+        }
+        .place-item:hover {
+            background-color: #FFCA28; /* Brighter amber */
+        }
+        .place-item.active {
+            background-color: #FFA000;
+            color: white;
+            font-weight: 600;
+        }
+        .place-item .number {
+            color: #BF360C; /* Deep orange */
+            font-weight: 600;
+        }
+        .place-item.active .number {
+            color: white;
+        }
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            background-color: #FFFDE7;
+        }
+        .leaflet-popup-content {
+            margin: 0;
+            padding: 15px;
+            width: 300px;
+        }
+        .leaflet-popup-content img {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+        .leaflet-popup-content p {
+            margin: 8px 0 0 0;
+            font-family: 'Inter', sans-serif;
+            color: #4E342E; /* Brownish text for readability */
+            line-height: 1.5;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #D84315;
+            padding: 8px 8px 0 0;
+        }
+        .gemini-button {
+            background-color: #FFA000;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+            margin-right: 5px;
+        }
+        .gemini-button:hover {
+            background-color: #D84315;
+        }
+
+        /* Gemini Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #FFFDE7;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 2rem;
+            line-height: 1;
+            color: #FFA000;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+        #gemini-modal-body p {
+            color: #4E342E;
+            line-height: 1.7;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #D84315;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="flex flex-col md:flex-row">
+        <!-- Sidebar with list of places -->
+        <div class="sidebar w-full md:w-1/3 lg:w-1/4">
+            <div class="p-5 bg-amber-200 border-b-2 border-amber-500">
+                <h1 class="sidebar-title text-2xl font-bold text-center">Śrī Caitanya's Yātrā</h1>
+                <p class="text-center text-amber-800 text-sm">The Lord's Tour of South India</p>
+            </div>
+            <div id="places-list">
+                <!-- Places will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="w-full md:w-2/3 lg:w-3/4">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- Gemini Modal -->
+    <div id="gemini-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="gemini-modal-close" class="modal-close-btn">&times;</button>
+            <h2 id="gemini-modal-title" class="text-2xl font-bold mb-4"></h2>
+            <div id="gemini-modal-body">
+                <div class="loader" id="gemini-loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Data: Places and Pastimes with CORRECTED coordinates and image URLs ---
+        const places = [
+            {
+                chronology: 1,
+                name: "Jagannātha Purī (Departure)",
+                lat: 19.8049,
+                lng: 85.8184,
+                pastime: "After taking sannyāsa, Śrī Caitanya Mahāprabhu resided in Jagannātha Purī. Overcome with the desire to find His brother, Viśvarūpa, He began His historic journey to South India, leaving His devastated devotees behind.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/ebf95568-12d9-4809-b78f-8d962058e5f2.png"
+            },
+            {
+                chronology: 2,
+                name: "Ālālanātha (Brahmagiri)",
+                lat: 19.7948,  // CORRECTED from 19.7011
+                lng: 85.6502,  // CORRECTED from 85.8035
+                pastime: "At the temple of Ālālanātha, the Lord displayed intense separation from Jagannātha. When He fell to the ground in ecstasy, the stone beneath Him melted from the touch of His divine body.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/916d1a93-548c-4444-8d4e-bca8eb24874c.png"
+            },
+            {
+                chronology: 3,
+                name: "Kūrma-sthāna (Srikurmam)",
+                lat: 18.2700,  // CORRECTED from 18.2635
+                lng: 84.0066,  // CORRECTED from 84.0083
+                pastime: "Here, at the temple of Kūrmadeva, Mahāprabhu met a brāhmaṇa named Kūrma, whom He initiated and instructed to stay home, chant Hare Kṛṣṇa, and preach the message of Kṛṣṇa to everyone he met.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/418f1d2c-ddf2-4467-9c10-d018b32115c5.png"
+            },
+            {
+                chronology: 4,
+                name: "Siṁhācalam",
+                lat: 17.7669,  // CORRECTED from 17.7668
+                lng: 83.2484,  // CORRECTED from 83.2495 
+                pastime: "The Lord visited the impressive temple of Lord Nṛsiṁhadeva at Siṁhācalam. He offered prayers and danced in great ecstasy, astonishing all the temple visitors with His devotional fervor.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/9d0a6b41-e737-4fbd-ae92-747d6c54784a.png"
+            },
+            {
+                chronology: 5,
+                name: "Godāvarī River Bank (Kovvur)",
+                lat: 17.0165,
+                lng: 81.7317,
+                pastime: "One of the most significant events. On the banks of the Godāvarī, the Lord met Rāmānanda Rāya. Their conversation systematically established the supreme truths of devotional service.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/0f111e1f-13d8-4f93-b648-5c421f153205.png"
+            },
+            {
+                chronology: 6,
+                name: "Śrī Raṅgam",
+                lat: 10.8625,
+                lng: 78.6900,
+                pastime: "Mahāprabhu stayed here for the four months of Cāturmāsya at the house of Veṅkaṭa Bhaṭṭa, converting the family to Gauḍīya Vaiṣṇavism and dancing daily before the Deity of Raṅganātha.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/e16f39cd-265c-4441-ae93-fd482a201201.png"
+            },
+            {
+                chronology: 7,
+                name: "Rāmeśvaram",
+                lat: 9.2881,  // CORRECTED to match Wikipedia coordinates
+                lng: 79.3130,  // CORRECTED to match Wikipedia coordinates
+                pastime: "At this holy place, the Lord read the Kūrma Purāṇa, where He found verses about the pure devotional service of a chaste wife, confirming Sītā Devī's supreme character.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/f7b02b5e-49b9-4a41-b684-25e227090b8f.png"
+            },
+            {
+                chronology: 8,
+                name: "Kanyākumārī",
+                lat: 8.0883,  // CORRECTED to match research
+                lng: 77.5385, // CORRECTED to match research
+                pastime: "At the southernmost tip of India, Mahāprabhu visited the temple of the goddess Kanyā (Durgā). He continued His mission of chanting, dancing, and liberating everyone He met with the holy names.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/34d31062-81c8-4b77-a8bd-5645511b816a.png"
+            },
+            {
+                chronology: 9,
+                name: "Pāṇḍharpur",
+                lat: 17.6698,
+                lng: 75.3323,
+                pastime: "In Pāṇḍharpur, the Lord joyfully saw the Deity of Lord Viṭṭhala. Here, He met Śrī Raṅga Purī, a disciple of Mādhavendra Purī, and heard intimate stories of His spiritual family line.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/83a48e77-5058-47d3-8b74-29de9d9bb73a.png"
+            },
+            {
+                chronology: 10,
+                name: "Uḍupī",
+                lat: 13.3409,
+                lng: 74.7421,
+                pastime: "In Uḍupī, the center of the Tattvavādī Mādhva sampradāya, Śrī Caitanya debated the ācāryas and established the supremacy of loving devotion over dry scriptural logic.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/6987f7bd-1f55-4e78-be7f-8557b77f8841.png"
+            },
+            {
+                chronology: 11,
+                name: "Śṛṅgeri",
+                lat: 13.4216,
+                lng: 75.2514,
+                pastime: "The Lord visited Śṛṅgeri, the seat of Śaṅkarācārya's impersonalist school. He compassionately debated and defeated the Māyāvādīs, establishing the personal nature of the Absolute Truth.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/19c7205c-a51f-4d98-b869-7d353a23a763.png"
+            },
+            {
+                chronology: 12,
+                name: "Anantapura (Return Journey)",
+                lat: 14.6819,
+                lng: 77.6006,
+                pastime: "During His return, He passed through this area and discovered two priceless books for the Gauḍīya sampradāya: the Brahma-saṁhitā and the Kṛṣṇa-karṇāmṛta.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/cd22c19a-32c0-4354-ab41-267929d2f2b9.png"
+            },
+            {
+                chronology: 13,
+                name: "Return to Jagannātha Purī",
+                lat: 19.8049,
+                lng: 85.8184,
+                pastime: "After two years of traveling and liberating countless souls, Śrī Caitanya Mahāprabhu returned to Purī. His devotees, who had been suffering in separation, were overjoyed upon His return.",
+                imageUrl: "https://storage.googleapis.com/aai-generative-images/2a75cdb3-2b22-4467-9c60-8fcccd0da5a0.png"
+            }
+        ];
+
+        // --- Gemini API Configuration ---
+        const API_KEY = ""; // Kept as an empty string as per instructions
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+
+        // --- Map Initialization ---
+        const map = L.map('map').setView([14.5, 78.9], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        const placesList = document.getElementById('places-list');
+        const markers = {};
+        const latlngs = [];
+
+        // --- Gemini Modal Elements ---
+        const modal = document.getElementById('gemini-modal');
+        const modalCloseBtn = document.getElementById('gemini-modal-close');
+        const modalOverlay = document.querySelector('.modal-overlay');
+        const modalTitle = document.getElementById('gemini-modal-title');
+        const modalBody = document.getElementById('gemini-modal-body');
+        const loader = document.getElementById('gemini-loader');
+
+        function removeAllActiveClasses() {
+            document.querySelectorAll('.place-item').forEach(item => item.classList.remove('active'));
+        }
+
+        places.forEach(place => {
+            const listItem = document.createElement('div');
+            listItem.className = 'place-item';
+            listItem.dataset.id = place.chronology;
+            listItem.innerHTML = `<span class="number">${place.chronology}.</span> ${place.name}`;
+            placesList.appendChild(listItem);
+
+            const marker = L.marker([place.lat, place.lng]).addTo(map);
+            markers[place.chronology] = marker;
+
+            const popupContent = `
+                <img src="${place.imageUrl}" alt="Image of pastime at ${place.name}">
+                <h3 class="sidebar-title text-lg font-bold">${place.chronology}. ${place.name}</h3>
+                <p>${place.pastime}</p>
+                <div>
+                    <button class="gemini-button" data-action="unfold" data-id="${place.chronology}">✨ Unfold the Lila</button>
+                    <button class="gemini-button" data-action="pray" data-id="${place.chronology}">✨ Inspire a Prayer</button>
+                </div>
+            `;
+
+            marker.bindPopup(popupContent);
+            latlngs.push([place.lat, place.lng]);
+
+            listItem.addEventListener('click', () => {
+                map.flyTo([place.lat, place.lng], 10);
+                marker.openPopup();
+            });
+
+            marker.on('click', () => {
+                removeAllActiveClasses();
+                listItem.classList.add('active');
+            });
+
+            marker.on('popupopen', () => {
+                removeAllActiveClasses();
+                listItem.classList.add('active');
+                listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        });
+
+        const polyline = L.polyline(latlngs, {
+            color: '#D84315',
+            weight: 3,
+            opacity: 0.7,
+            smoothFactor: 1
+        }).addTo(map);
+
+        document.querySelector('.place-item[data-id="1"]').classList.add('active');
+        setTimeout(() => {
+            markers[1].openPopup();
+        }, 500);
+
+        // --- Gemini API Call Logic ---
+        async function callGeminiAPI(prompt) {
+            const payload = {
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }]
+            };
+
+            let response;
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) { // Retry up to 5 times
+                try {
+                    response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        return result.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't retrieve the details at the moment.";
+                    } else if (response.status === 429) { // Throttling
+                        console.warn(`API call failed with status 429. Retrying in ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    } else {
+                        throw new Error(`API call failed with status ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error("Error calling Gemini API:", error);
+                    if (i === 4) return "An error occurred while fetching the information. Please try again later.";
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+            return "Failed to fetch information after several retries.";
+        }
+
+        // --- Modal Handling and Event Delegation for Gemini Buttons ---
+        document.addEventListener('click', async (e) => {
+            if (e.target.matches('.gemini-button')) {
+                const action = e.target.dataset.action;
+                const id = e.target.dataset.id;
+                const place = places.find(p => p.chronology == id);
+
+                if (!place) return;
+
+                modal.classList.add('visible');
+                loader.style.display = 'block';
+                modalBody.innerHTML = '';
+                modalBody.appendChild(loader);
+
+                let prompt = '';
+                if (action === 'unfold') {
+                    modalTitle.innerText = `Unfolding the Lila at ${place.name}`;
+                    prompt = `As a scholar of Gaudiya Vaishnavism, provide a detailed and engaging narrative of Sri Chaitanya Mahaprabhu's pastime at ${place.name}. The summary is: "${place.pastime}". Expand on this with more context, emotion, and philosophical meaning. Write it as a short, compelling story for a devotee's reflection.`;
+                } else if (action === 'pray') {
+                    modalTitle.innerText = `Prayer Inspired by ${place.name}`;
+                    prompt = `Based on the pastime of Sri Chaitanya Mahaprabhu at ${place.name}, where "${place.pastime}", compose a short, heartfelt prayer of 4-6 lines. The prayer should help a person connect with the specific spiritual mood (bhava) of this sacred event.`;
+                }
+
+                const resultText = await callGeminiAPI(prompt);
+                loader.style.display = 'none';
+                modalBody.innerHTML = `<p>${resultText.replace(/\n/g, '<br>')}</p>`;
+            }
+        });
+
+        function closeModal() {
+            modal.classList.remove('visible');
+        }
+
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
