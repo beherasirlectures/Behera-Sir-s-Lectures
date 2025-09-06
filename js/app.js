@@ -14,6 +14,7 @@ class AudioLecturePlayer {
         this.favorites = new Set();
         this.searchTerm = '';
         this.sortBy = 'date';
+        this.userDataKey = 'audioLectureUserData';
         
         this.initializeApp();
         this.bindEvents();
@@ -101,6 +102,9 @@ class AudioLecturePlayer {
         this.elements.audioElement.addEventListener('play', () => this.handlePlay());
         this.elements.audioElement.addEventListener('pause', () => this.handlePause());
         
+        // Save progress when user leaves the page
+        window.addEventListener('beforeunload', () => this.saveCurrentLectureState());
+
         // Library controls
         this.elements.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
         this.elements.sortSelect.addEventListener('change', (e) => this.handleSort(e.target.value));
@@ -130,51 +134,89 @@ class AudioLecturePlayer {
     }
 
     loadLectureData() {
-        // Load the provided lecture data
         // Fetch lecture data from metadata.json
         fetch('metadata.json')
             .then(response => response.json())
             .then(lectureData => {
-            this.lectures = lectureData.lectures;
+                this.lectures = lectureData.lectures;
+                this.mergeUserData(); // Load user data from localStorage
 
-            // Initialize favorites from data
-            this.lectures.forEach(lecture => {
-                if (lecture.isFavorite) {
-                this.favorites.add(lecture.id);
-                }
-            });
+                // Initialize favorites from data
+                this.lectures.forEach(lecture => {
+                    if (lecture.isFavorite) {
+                        this.favorites.add(lecture.id);
+                    }
+                });
 
-            // Initialize playback history
-            this.playbackHistory = this.lectures
-                .filter(lecture => lecture.lastPlayed)
-                .sort((a, b) => new Date(b.lastPlayed) - new Date(a.lastPlayed));
+                // Initialize playback history
+                this.playbackHistory = this.lectures
+                    .filter(lecture => lecture.lastPlayed)
+                    .sort((a, b) => new Date(b.lastPlayed) - new Date(a.lastPlayed));
 
-            this.filterAndRenderLectures();
+                this.filterAndRenderLectures();
             })
             .catch(error => {
-            console.error('Failed to load lecture metadata:', error);
-            // Optionally show a user-friendly error message
+                console.error('Failed to load lecture metadata:', error);
+                // Optionally show a user-friendly error message
             });
-        return; // Prevent further code execution in this method until fetch completes
+    }
 
-        this.lectures = lectureData.lectures;
-        
-        // Initialize favorites from data
+    mergeUserData() {
+        const userData = this.loadUserData();
+        if (!userData) return;
+
         this.lectures.forEach(lecture => {
-            if (lecture.isFavorite) {
-                this.favorites.add(lecture.id);
+            if (userData[lecture.id]) {
+                const saved = userData[lecture.id];
+                lecture.isFavorite = saved.isFavorite || false;
+                lecture.playCount = saved.playCount || 0;
+                lecture.lastPosition = saved.lastPosition || 0;
+                lecture.lastPlayed = saved.lastPlayed || null;
             }
         });
-        
-        // Initialize playback history
-        this.playbackHistory = this.lectures
-            .filter(lecture => lecture.lastPlayed)
-            .sort((a, b) => new Date(b.lastPlayed) - new Date(a.lastPlayed));
-        
-        this.filterAndRenderLectures();
+    }
+
+    loadUserData() {
+        try {
+            const data = localStorage.getItem(this.userDataKey);
+            return data ? JSON.parse(data) : {};
+        } catch (error) {
+            console.error('Failed to load user data:', error);
+            return {};
+        }
+    }
+
+    saveLectureState(lectureId, data) {
+        if (!lectureId) return;
+        try {
+            const allUserData = this.loadUserData();
+            allUserData[lectureId] = {
+                ...allUserData[lectureId],
+                ...data
+            };
+            localStorage.setItem(this.userDataKey, JSON.stringify(allUserData));
+        } catch (error) {
+            console.error('Failed to save lecture state for', lectureId, error);
+        }
+    }
+
+    saveCurrentLectureState() {
+        if (this.currentLecture) {
+            this.saveLectureState(this.currentLecture.id, {
+                lastPosition: this.elements.audioElement.currentTime
+            });
+        }
     }
 
     initializeTheme() {
+        console.log('Initializing theme');
+        // Check saved preference
+        const savedTheme = localStorage.getItem('color-scheme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-color-scheme', savedTheme);
+            this.elements.themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+            return;
+        }
         // Check system preference
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (prefersDark) {
@@ -240,7 +282,7 @@ class AudioLecturePlayer {
 
     filterAndRenderLectures() {
         let lectures = [...this.lectures];
-        
+        console.log(lectures)
         // Filter by section
         switch (this.currentSection) {
             case 'recent':
@@ -273,17 +315,21 @@ class AudioLecturePlayer {
         lectures.sort((a, b) => {
             switch (this.sortBy) {
                 case 'title':
-                    return a.title.localeCompare(b.title);
+                    console.log('Sorting by title:', a.title, b.title);
+                    return a.key.localeCompare(b.key);
                 case 'instructor':
+                    
+                    console.log('Sorting by instructor:', a.instructor, b.instructor);
                     return a.instructor.localeCompare(b.instructor);
                 case 'duration':
                     return b.duration - a.duration;
                 case 'date':
-                default:
                     return new Date(this.parseDate(b.date)) - new Date(this.parseDate(a.date));
+                default:
+                    return 0;
             }
         });
-        
+        console.log('Filtered lectures:', lectures);
         this.filteredLectures = lectures;
         this.renderLectures();
     }
@@ -295,14 +341,26 @@ class AudioLecturePlayer {
             'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
         };
         
-        const parts = dateStr.split(' ');
-        if (parts.length === 3) {
-            const day = parseInt(parts[0]);
-            const month = months[parts[1]];
-            const year = parseInt(parts[2]);
-            return new Date(year, month, day);
+    // Clean the string: trim whitespace and remove ordinal suffixes (st, nd, rd, th)
+        const cleanedDateStr = dateStr.trim().replace(/(\d+)(st|nd|rd|th)/, '$1');
+        
+        const date = new Date(cleanedDateStr);
+        if (isNaN(date.getTime())) {
+            console.log('Failed to parse date:', dateStr);
+            return new Date(0); // Return a fallback for unparseable dates
         }
-        return new Date(dateStr);
+        return date;
+        // const parts = dateStr.split(' ');
+        // if (parts.length === 3) {
+        //     // Extract the numeric part from strings like "28th", "1st", etc.
+        //     const day = parseInt(parts[0].match(/^\d+/));
+        //     console.log('Parsed day:', day);
+        //     const month = months[parts[1]];
+        //     const year = parseInt(parts[2]);
+        //     return new Date(year, month, day);
+        // }
+        // console.log('Failed to parse date:', dateStr);
+        // return new Date(dateStr);
     }
 
     renderLectures() {
@@ -330,9 +388,21 @@ class AudioLecturePlayer {
             // Populate lecture information
             lectureElement.querySelector('.lecture-title').textContent = lecture.title;
             lectureElement.querySelector('.lecture-instructor').textContent = lecture.instructor;
-            lectureElement.querySelector('.lecture-course').textContent = lecture.course;
+            lectureElement.querySelector('.lecture-course').textContent = lecture.key;
             lectureElement.querySelector('.duration').textContent = this.formatTime(lecture.duration);
             lectureElement.querySelector('.date').textContent = lecture.date;
+            
+            // Add play count indicator if exists
+            if (lecture.playCount > 0) {
+                const metaContainer = lectureElement.querySelector('.lecture-meta') || lectureElement.querySelector('.lecture-meta-grid');
+                if (metaContainer) {
+                    const playCountSpan = document.createElement('span');
+                    playCountSpan.className = 'play-count';
+                    playCountSpan.textContent = `▶ ${lecture.playCount}`;
+                    playCountSpan.style.cssText = 'color: var(--color-primary); font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);';
+                    metaContainer.appendChild(playCountSpan);
+                }
+            }
             
             // Add tags for list view
             if (this.currentView === 'list' && lecture.tags) {
@@ -417,30 +487,6 @@ class AudioLecturePlayer {
         });
     }
 
-    // simulateAudioPlayback(lecture) {
-    //     // Since we don't have actual audio files, we'll show a message and update the UI
-    //     if (!lecture.audioUrl || !lecture.audioUrl.startsWith('http')) {
-    //         this.showPlaybackMessage(lecture);
-    //     }
-        
-    //     // Set playing state
-    //     this.isPlaying = true;
-    //     this.updatePlayPauseButton();
-        
-    //     // Simulate duration and current time
-    //     this.elements.totalTime.textContent = this.formatTime(lecture.duration);
-    //     this.elements.currentTime.textContent = this.formatTime(lecture.lastPosition || 0);
-        
-    //     // Update progress based on last position
-    //     if (lecture.lastPosition > 0) {
-    //         const progress = (lecture.lastPosition / lecture.duration) * 100;
-    //         this.elements.progressFill.style.width = `${progress}%`;
-    //         this.elements.progressSlider.value = progress;
-    //     } else {
-    //         this.elements.progressFill.style.width = '0%';
-    //         this.elements.progressSlider.value = 0;
-    //     }
-    // }
     simulateAudioPlayback(lecture) {
         // Check if the lecture has a valid audio file
         if (!lecture.filename) {
@@ -455,6 +501,13 @@ class AudioLecturePlayer {
     
         // Update the UI with lecture details
         this.updatePlayerInfo();
+        
+        // Resume from last position if available
+        if (lecture.lastPosition > 0) {
+            this.elements.audioElement.addEventListener('loadedmetadata', () => {
+                this.elements.audioElement.currentTime = lecture.lastPosition;
+            }, { once: true });
+        }
     
         // Play the audio
         this.elements.audioElement.play().then(() => {
@@ -463,22 +516,6 @@ class AudioLecturePlayer {
         }).catch((error) => {
             console.error('Error playing audio:', error);
             alert('Failed to play the audio file. Please check if the file exists.');
-        });
-    
-        // Update progress and duration when metadata is loaded
-        this.elements.audioElement.addEventListener('loadedmetadata', () => {
-            this.elements.totalTime.textContent = this.formatTime(this.elements.audioElement.duration);
-            this.updateProgress();
-        });
-    
-        // Update progress as the audio plays
-        this.elements.audioElement.addEventListener('timeupdate', () => {
-            this.updateProgress();
-        });
-    
-        // Handle audio end
-        this.elements.audioElement.addEventListener('ended', () => {
-            this.handleAudioEnd();
         });
     }
 
@@ -536,15 +573,24 @@ class AudioLecturePlayer {
         // Remove from history if already exists
         this.playbackHistory = this.playbackHistory.filter(l => l.id !== lecture.id);
         
-        // Add to beginning of history
-        const lectureWithTimestamp = { ...lecture, lastPlayed: new Date().toISOString().split('T')[0] };
+        // Add to beginning of history with current timestamp
+        const lectureWithTimestamp = { 
+            ...lecture, 
+            lastPlayed: new Date().toISOString()
+        };
         this.playbackHistory.unshift(lectureWithTimestamp);
         
         // Keep only last 50 items
         this.playbackHistory = this.playbackHistory.slice(0, 50);
         
-        // Update play count
+        // Update play count and save to localStorage
         lecture.playCount = (lecture.playCount || 0) + 1;
+        lecture.lastPlayed = lectureWithTimestamp.lastPlayed;
+        
+        this.saveLectureState(lecture.id, {
+            playCount: lecture.playCount,
+            lastPlayed: lecture.lastPlayed
+        });
     }
 
     togglePlayPause() {
@@ -618,6 +664,9 @@ class AudioLecturePlayer {
             lecture.isFavorite = true;
         }
         
+        // Save to localStorage
+        this.saveLectureState(lecture.id, { isFavorite: lecture.isFavorite });
+        
         // Update UI
         if (this.currentLecture && this.currentLecture.id === lecture.id) {
             this.elements.favoriteBtn.classList.toggle('active', lecture.isFavorite);
@@ -626,13 +675,20 @@ class AudioLecturePlayer {
         this.renderLectures();
     }
 
+    updateFavoriteButton() {
+        this.elements.favoriteBtn.classList.toggle('active', this.currentLecture.isFavorite);
+    }
+
     bookmarkPosition() {
         if (!this.currentLecture) return;
         
-        // In a real application, this would bookmark the current audio position
-        this.elements.bookmarkBtn.classList.add('active');
+        this.currentLecture.lastPosition = this.elements.audioElement.currentTime;
+        this.saveLectureState(this.currentLecture.id, {
+            lastPosition: this.currentLecture.lastPosition
+        });
         
         // Show temporary feedback
+        this.elements.bookmarkBtn.classList.add('active');
         const originalText = this.elements.bookmarkBtn.textContent;
         this.elements.bookmarkBtn.textContent = '✓';
         setTimeout(() => {
@@ -764,7 +820,16 @@ class AudioLecturePlayer {
 
     handlePlay() {
         this.isPlaying = true;
-        this.updatePlayPauseButton();
+        this.elements.playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+        document.querySelector(`.lecture-item[data-id="${this.currentLecture.id}"]`)?.classList.add('playing');
+        
+        // Update play count and last played date
+        this.currentLecture.playCount = (this.currentLecture.playCount || 0) + 1;
+        this.currentLecture.lastPlayed = new Date().toISOString();
+        this.saveLectureState(this.currentLecture.id, {
+            playCount: this.currentLecture.playCount,
+            lastPlayed: this.currentLecture.lastPlayed
+        });
     }
 
     handlePause() {
@@ -776,11 +841,15 @@ class AudioLecturePlayer {
         this.isPlaying = false;
         this.updatePlayPauseButton();
         
+        // Reset position for the completed lecture
+        this.currentLecture.lastPosition = 0;
+        this.saveLectureState(this.currentLecture.id, { lastPosition: 0 });
+        
         // Handle repeat modes
         if (this.repeatMode === 'one') {
             this.playLecture(this.currentLecture);
         } else if (this.repeatMode === 'all' || this.currentIndex < this.lectures.length - 1) {
-            this.nextLecture();
+            this.nextLecture(true); // Pass true to indicate it's an auto-next
         }
     }
 
